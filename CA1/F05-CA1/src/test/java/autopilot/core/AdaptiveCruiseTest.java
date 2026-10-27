@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,6 +14,7 @@ class AdaptiveCruiseTest {
     private static final double TARGET_SPEED_KMH = 100.0;
     private static final double CRUISING_SPEED_KMH = 80.0;
     private static final double SAFE_DISTANCE_METERS = 40.0;
+    private static final double EMERGENCY_DISTANCE_METERS = 20.0;
     private static final double RELEASE_DISTANCE_METERS = 48.0;
 
     private AdaptiveCruise cruise;
@@ -75,10 +77,7 @@ class AdaptiveCruiseTest {
     }
 
     @ParameterizedTest(name = "distance={0}: emergency braking")
-    @CsvSource({
-            "0.0",
-            "20.0"
-    })
+    @ValueSource(doubles = {0.0, EMERGENCY_DISTANCE_METERS})
     void update_whenDistanceIsAtOrBelowEmergencyThreshold_emergencyBrakes(
             double distanceMeters) {
         AdaptiveCruise.Decision decision =
