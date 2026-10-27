@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.CsvFileSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,12 +55,39 @@ class BrakeControllerTest {
         assertEquals(90.0, thirdPressure);
     }
 
-    @Test
-    void apply_whenAbsPressureIsAtThreshold_doesNotPulse() {
-        double actualPressure =
-                controller.apply(80.0, HIGH_SPEED_KMH, GearBox.Gear.D);
+    @ParameterizedTest
+    @CsvSource({
+            "79.999, 79.999",
+            "80.0,   80.0",
+            "80.001, 90.0"
+    })
+    void apply_whenPressureCrossesAbsThreshold_activatesAbsOnlyAboveThreshold(
+            double requestedPressure,
+            double expectedPressure) {
 
-        assertEquals(80.0, actualPressure);
+        double actualPressure =
+                controller.apply(
+                        requestedPressure,
+                        HIGH_SPEED_KMH,
+                        GearBox.Gear.D);
+
+        assertEquals(expectedPressure, actualPressure);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "29.999, 100.0",
+            "30.0,   100.0",
+            "30.001, 90.0"
+    })
+    void apply_whenSpeedCrossesAbsThreshold_activatesAbsOnlyAboveThreshold(
+            double speedKmh,
+            double expectedPressure) {
+
+        double actualPressure =
+                controller.apply(100.0, speedKmh, GearBox.Gear.D);
+
+        assertEquals(expectedPressure, actualPressure);
     }
 
     @Test
@@ -73,11 +101,18 @@ class BrakeControllerTest {
         assertEquals(90.0, nextAbsPressure);
     }
 
-    @Test
-    void emergencyBrake_whenGearAllowsBraking_appliesMaximumPressureAndWarning() {
-        controller.emergencyBrake(GearBox.Gear.D);
+    @ParameterizedTest
+    @CsvFileSource(
+            resources = "/brake-emergency-gears.csv",
+            numLinesToSkip = 1
+    )
+    void emergencyBrake_whenGearAllowsBraking_appliesMaximumPressureAndWarning(
+            GearBox.Gear gear,
+            double expectedPressure) {
 
-        assertEquals(100.0, controller.getPressure());
+        controller.emergencyBrake(gear);
+
+        assertEquals(expectedPressure, controller.getPressure());
         assertTrue(controller.isWarningActive());
     }
 
@@ -121,10 +156,20 @@ class BrakeControllerTest {
                         STATIONARY_SPEED_KMH, GearBox.Gear.D));
     }
 
-    @Test
-    void apply_whenSpeedIsInvalid_throws() {
+    @ParameterizedTest
+    @CsvSource({
+            "-0.1",
+            "NaN",
+            "Infinity",
+            "-Infinity"
+    })
+    void apply_whenSpeedIsInvalid_throws(double invalidSpeed) {
+
         assertThrows(IllegalArgumentException.class,
-                () -> controller.apply(25.0, Double.NaN, GearBox.Gear.D));
+                () -> controller.apply(
+                        25.0,
+                        invalidSpeed,
+                        GearBox.Gear.D));
     }
 
     @Test
