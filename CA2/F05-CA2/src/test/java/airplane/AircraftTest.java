@@ -190,7 +190,6 @@ class AircraftTest {
 
     @Test
     void cruise_whenEngineOperational_consumesRequestedFuelAmount() {
-        // Setup
         when(engine.isOperational()).thenReturn(true);
         when(fuelSystem.hasEnoughFuel()).thenReturn(true);
         when(navigationSystem.isRouteAvailable()).thenReturn(true);
@@ -198,12 +197,32 @@ class AircraftTest {
         aircraft.prepareForTakeoff();
         aircraft.takeOff();
 
-        // Exercise
         aircraft.cruise(150.0);
 
-        // Verify
         verify(fuelSystem, times(1)).consumeFuel(150.0);
         assertEquals(FlightStatus.IN_FLIGHT, aircraft.getStatus());
+    }
+
+
+    @Test
+    void prepareForTakeoff_whenRouteUnavailable_remainsGrounded() {
+        when(engine.isOperational()).thenReturn(true);
+        when(fuelSystem.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystem.isRouteAvailable()).thenReturn(false);
+
+        FlightException exception = assertThrows(
+                FlightException.class,
+                () -> aircraft.prepareForTakeoff()
+        );
+
+        assertEquals(
+                "Cannot prepare for takeoff: route is unavailable.",
+                exception.getMessage()
+        );
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus());
+
+        verify(navigationSystem, times(1)).isRouteAvailable();
+        verify(engine, times(0)).start();
     }
 
 }
