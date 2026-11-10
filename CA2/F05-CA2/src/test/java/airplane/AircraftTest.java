@@ -186,4 +186,24 @@ class AircraftTest {
 
         verify(fuelSystem, times(0)).consumeFuel(any(Double.class));
     }
+
+
+    @Test
+    void cruise_whenEngineOperational_consumesRequestedFuelAmount() {
+        // Setup
+        when(engine.isOperational()).thenReturn(true);
+        when(fuelSystem.hasEnoughFuel()).thenReturn(true);
+        when(navigationSystem.isRouteAvailable()).thenReturn(true);
+
+        aircraft.prepareForTakeoff();
+        aircraft.takeOff();
+
+        // Exercise
+        aircraft.cruise(150.0);
+
+        // Verify
+        verify(fuelSystem, times(1)).consumeFuel(150.0);
+        assertEquals(FlightStatus.IN_FLIGHT, aircraft.getStatus());
+    }
+
 }
