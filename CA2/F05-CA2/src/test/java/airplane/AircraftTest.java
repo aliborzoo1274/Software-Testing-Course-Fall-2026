@@ -20,6 +20,8 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class AircraftTest {
 
@@ -43,7 +45,6 @@ class AircraftTest {
         when(engine.isOperational()).thenReturn(true);
         when(fuelSystem.hasEnoughFuel()).thenReturn(true);
         when(navigationSystem.isRouteAvailable()).thenReturn(true);
-        doNothing().when(engine).start();
         doNothing().when(landingGear).retract();
         doNothing().when(fuelSystem).consumeFuel(any(Double.class));
         doNothing().when(landingGear).deploy();
@@ -68,7 +69,7 @@ class AircraftTest {
         verify(navigationSystem, times(1)).isRouteAvailable();
         verify(engine, times(1)).start();
         verify(landingGear, times(1)).retract();
-        verify(fuelSystem, times(1)).consumeFuel(any(Double.class));
+        verify(fuelSystem, times(1)).consumeFuel(150.0);
         verify(landingGear, times(1)).deploy();
         verify(engine, times(1)).stop();
     }
@@ -134,8 +135,8 @@ class AircraftTest {
         when(engine.isOperational()).thenReturn(true);
         when(fuelSystem.hasEnoughFuel()).thenReturn(true);
         when(navigationSystem.isRouteAvailable()).thenReturn(true);
-        doThrow(new IllegalStateException("Not enough fuel."))
-                .when(fuelSystem).consumeFuel(any(Double.class));
+        IllegalStateException cause = new IllegalStateException("Not enough fuel.");
+        doThrow(cause).when(fuelSystem).consumeFuel(500.0);
 
         aircraft.prepareForTakeoff();
         aircraft.takeOff();
@@ -146,8 +147,9 @@ class AircraftTest {
         );
 
         assertEquals(FlightStatus.LANDED, aircraft.getStatus());
-        assertSame(IllegalStateException.class, exception.getCause().getClass());
-        verify(fuelSystem, times(1)).consumeFuel(any(Double.class));
+        assertEquals("A problem occurred while consuming fuel.", exception.getMessage());
+        assertSame(cause, exception.getCause());
+        verify(fuelSystem, times(1)).consumeFuel(500.0);
         verify(landingGear, times(1)).deploy();
         verify(engine, times(1)).stop();
     }
@@ -157,22 +159,53 @@ class AircraftTest {
         when(engine.isOperational()).thenReturn(true);
         when(fuelSystem.hasEnoughFuel()).thenReturn(true);
         when(navigationSystem.isRouteAvailable()).thenReturn(true);
-        doThrow(new IllegalStateException("Starter motor failed.")).when(engine).start();
+        IllegalStateException cause =
+                new IllegalStateException("Starter motor failed.");
 
+        doThrow(cause).when(engine).start();
         aircraft.prepareForTakeoff();
 
-        assertThrows(FlightException.class, () -> aircraft.takeOff());
+        FlightException exception = assertThrows(
+                FlightException.class,
+                aircraft::takeOff
+        );
+
+        assertSame(cause, exception.getCause());
         assertEquals(FlightStatus.ABORTED, aircraft.getStatus());
 
         verify(engine, times(1)).start();
         verify(landingGear, times(0)).retract();
     }
 
+
     @Test
-    void cruise_whenAircraftNotInFlightOrFuelAmountNonPositive_throwsExceptionWithoutConsumingFuel() {
-        assertThrows(FlightException.class, () -> aircraft.takeOff());
+    void takeOff_whenGrounded_rejectsWithoutStartingEngine() {
+        assertThrows(FlightException.class, aircraft::takeOff);
+
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus());
+        verify(engine, times(0)).start();
+    }
+
+    @Test
+    void cruise_whenGrounded_rejectsWithoutConsumingFuel() {
         assertThrows(FlightException.class, () -> aircraft.cruise(50.0));
-        assertThrows(FlightException.class, () -> aircraft.land());
+
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus());
+        verify(fuelSystem, times(0)).consumeFuel(any(Double.class));
+    }
+
+    @Test
+    void land_whenGrounded_rejectsWithoutDeployingGear() {
+        assertThrows(FlightException.class, aircraft::land);
+
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus());
+        verify(landingGear, times(0)).deploy();
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {0.0, -25.0})
+    void cruise_whenFuelAmountNonPositive_rejectsWithoutConsumingFuel(
+            double fuelAmount) {
 
         when(engine.isOperational()).thenReturn(true);
         when(fuelSystem.hasEnoughFuel()).thenReturn(true);
@@ -181,9 +214,12 @@ class AircraftTest {
         aircraft.prepareForTakeoff();
         aircraft.takeOff();
 
-        assertThrows(IllegalArgumentException.class, () -> aircraft.cruise(0.0));
-        assertThrows(IllegalArgumentException.class, () -> aircraft.cruise(-25.0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> aircraft.cruise(fuelAmount)
+        );
 
+        assertEquals(FlightStatus.IN_FLIGHT, aircraft.getStatus());
         verify(fuelSystem, times(0)).consumeFuel(any(Double.class));
     }
 
@@ -224,5 +260,27 @@ class AircraftTest {
         verify(navigationSystem, times(1)).isRouteAvailable();
         verify(engine, times(0)).start();
     }
+
+
+    @Test
+    void prepareForTakeoff_whenEngineNotOperational_staysGrounded() {
+        when(engine.isOperational()).thenReturn(false);
+
+        FlightException exception = assertThrows(
+                FlightException.class,
+                aircraft::prepareForTakeoff
+        );
+
+        assertEquals(
+                "Cannot prepare for takeoff: engine is not operational.",
+                exception.getMessage()
+        );
+        assertEquals(FlightStatus.GROUNDED, aircraft.getStatus());
+
+        verify(engine, times(1)).isOperational();
+        verify(fuelSystem, times(0)).hasEnoughFuel();
+        verify(navigationSystem, times(0)).isRouteAvailable();
+    }
+
 
 }
